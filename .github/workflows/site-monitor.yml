@@ -1,7 +1,14 @@
 name: Shinra Portal New Listing Monitor
 
 on:
+  schedule:
+    - cron: "*/5 * * * *"
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/site-monitor.yml"
 
 permissions:
   contents: write
