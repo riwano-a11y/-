@@ -24,9 +24,13 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
-          curl             --fail             --silent             --show-error             --location             --max-time 20             --retry 2             --retry-delay 5             --user-agent "ShinraPortalMonitor/1.0 (+GitHub Actions)"             https://shinra-portal.com/             > /dev/null
+          curl --fail --silent --show-error --location \
+            --max-time 20 --retry 2 --retry-delay 5 \
+            --user-agent "ShinraPortalMonitor/1.0 (+GitHub Actions)" \
+            https://shinra-portal.com/ > /dev/null
 
       - name: Open outage issue
+        id: outage
         if: steps.check.outcome == 'failure'
         uses: actions/github-script@v7
         with:
@@ -52,9 +56,24 @@ jobs:
                   `- Workflow: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
                 ].join("\n")
               });
+              core.setOutput("notify", "true");
+            } else {
+              core.setOutput("notify", "false");
             }
 
+      - name: Notify Slack of outage
+        if: steps.outage.outputs.notify == 'true'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        shell: bash
+        run: |
+          payload=$(jq -n --arg text "🚨 障害検知: https://shinra-portal.com/ に接続できません。\n確認: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" '{text: $text}')
+          curl --fail --silent --show-error -X POST \
+            -H "Content-Type: application/json" \
+            --data "$payload" "$SLACK_WEBHOOK_URL"
+
       - name: Close outage issue after recovery
+        id: recovery
         if: steps.check.outcome == 'success'
         uses: actions/github-script@v7
         with:
@@ -66,7 +85,8 @@ jobs:
               state: "open",
               per_page: 100
             });
-            for (const issue of issues.filter(issue => !issue.pull_request && issue.title === title)) {
+            const outages = issues.filter(issue => !issue.pull_request && issue.title === title);
+            for (const issue of outages) {
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -81,6 +101,18 @@ jobs:
                 state_reason: "completed"
               });
             }
+            core.setOutput("notify", outages.length > 0 ? "true" : "false");
+
+      - name: Notify Slack of recovery
+        if: steps.recovery.outputs.notify == 'true'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        shell: bash
+        run: |
+          payload=$(jq -n --arg text "✅ 復旧確認: https://shinra-portal.com/ は正常に応答しています。\n確認: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" '{text: $text}')
+          curl --fail --silent --show-error -X POST \
+            -H "Content-Type: application/json" \
+            --data "$payload" "$SLACK_WEBHOOK_URL"
 
       - name: Mark workflow failed
         if: steps.check.outcome == 'failure'
