@@ -27,6 +27,7 @@ https://shinra-portal.com/shops/gyosei-shoshi-kadowaki-office/
 https://shinra-portal.com/shops/hanko-shinya-bar-sabo-sangenjaya-store/
 https://shinra-portal.com/shops/hashima-traditional-house-renovation-workshop/
 https://shinra-portal.com/shops/head-spa-specialty-shop-yuu-osaka/
+https://shinra-portal.com/shops/hina-hot-soup-hotpot-beer-garden/
 https://shinra-portal.com/shops/home-nursing-station-neon/
 https://shinra-portal.com/shops/jinen-garden/
 https://shinra-portal.com/shops/juneri-diner/
@@ -55,6 +56,7 @@ https://shinra-portal.com/shops/mori-trading-co-ltd/
 https://shinra-portal.com/shops/mou-mou-milky-paradise-sennichimae-main-store/
 https://shinra-portal.com/shops/n-waxing-bynatsu/
 https://shinra-portal.com/shops/naganuma-auto-repair-factory/
+https://shinra-portal.com/shops/nishinakajima-marutake-barbecue/
 https://shinra-portal.com/shops/nomio/
 https://shinra-portal.com/shops/osaka-festival-north-osaka-family-hall-north-osaka-festival/
 https://shinra-portal.com/shops/osaka-festival-sakai-family-hall-sakai-osaka-festival/
@@ -68,6 +70,7 @@ https://shinra-portal.com/shops/posy-cafe-pizza/
 https://shinra-portal.com/shops/prostec/
 https://shinra-portal.com/shops/public-house-robin/
 https://shinra-portal.com/shops/puresocto-inc/
+https://shinra-portal.com/shops/ramen-pork-summit-okayama-takayanagi-main-store/
 https://shinra-portal.com/shops/rex-aoyama/
 https://shinra-portal.com/shops/sado-stay-01/
 https://shinra-portal.com/shops/sado-stay-02-kinsan-kyomachi/
@@ -85,6 +88,7 @@ https://shinra-portal.com/shops/tatami-inn-naha-tsuboya-by-cordio-premium/
 https://shinra-portal.com/shops/tea-balance-personal-gym-yokohama-station/
 https://shinra-portal.com/shops/teppanyaki-yakiniku-steak-kiju/
 https://shinra-portal.com/shops/tetsunagi/
+https://shinra-portal.com/shops/tiger-auto/
 https://shinra-portal.com/shops/toriyaki-dokoro-seiheibird/
 https://shinra-portal.com/shops/triarchitects/
 https://shinra-portal.com/shops/tuna-master/
