@@ -1,3 +1,4 @@
+https://shinra-portal.com/shops/100bikes-kyoto/
 https://shinra-portal.com/shops/akagawa-no-yado-okuya/
 https://shinra-portal.com/shops/araidokoro-hitoyoshi-shimobayashi-shop/
 https://shinra-portal.com/shops/arowana-shop-sisik/
@@ -8,6 +9,7 @@ https://shinra-portal.com/shops/biss/
 https://shinra-portal.com/shops/bond-stand/
 https://shinra-portal.com/shops/cafe-bar-hp/
 https://shinra-portal.com/shops/chiropractic-clinic-yamada-sanchi/
+https://shinra-portal.com/shops/chiropractic-lakunilu/
 https://shinra-portal.com/shops/dig-it-barbershop/
 https://shinra-portal.com/shops/dog-salon-pirka/
 https://shinra-portal.com/shops/dr-shi-gyo/
@@ -70,6 +72,7 @@ https://shinra-portal.com/shops/posy-cafe-pizza/
 https://shinra-portal.com/shops/prostec/
 https://shinra-portal.com/shops/public-house-robin/
 https://shinra-portal.com/shops/puresocto-inc/
+https://shinra-portal.com/shops/rabbit-cotton/
 https://shinra-portal.com/shops/ramen-pork-summit-okayama-takayanagi-main-store/
 https://shinra-portal.com/shops/rex-aoyama/
 https://shinra-portal.com/shops/sado-stay-01/
