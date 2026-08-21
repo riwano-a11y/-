@@ -1,0 +1,18 @@
+[Unit]
+Description=Shinra Portal new listing Slack monitor
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=root
+EnvironmentFile=/etc/shinra-listing-monitor.env
+ExecStart=/usr/bin/python3 /opt/shinra-listing-monitor/new_listing_monitor.py
+Restart=always
+RestartSec=5
+StateDirectory=shinra-listing-monitor
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
