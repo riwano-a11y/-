@@ -31,11 +31,13 @@ https://shinra-portal.com/shops/hashima-traditional-house-renovation-workshop/
 https://shinra-portal.com/shops/head-spa-specialty-shop-yuu-osaka/
 https://shinra-portal.com/shops/hina-hot-soup-hotpot-beer-garden/
 https://shinra-portal.com/shops/home-nursing-station-neon/
+https://shinra-portal.com/shops/home-nursing-station-share-life/
 https://shinra-portal.com/shops/jinen-garden/
 https://shinra-portal.com/shops/juneri-diner/
 https://shinra-portal.com/shops/kabushiki-gaisha-grwin/
 https://shinra-portal.com/shops/kabushiki-gaisha-succeed/
 https://shinra-portal.com/shops/kabushikigaisha-ishinaga-global-motors/
+https://shinra-portal.com/shops/kabushikigaisha-oa-sign/
 https://shinra-portal.com/shops/kabusikigaisya-hoken-no-zenbu-fukuoka-shisha/
 https://shinra-portal.com/shops/kaitori-daikichi-togane-tamagoten/
 https://shinra-portal.com/shops/kaitori-nagayoshi/
@@ -65,6 +67,7 @@ https://shinra-portal.com/shops/osaka-festival-sakai-family-hall-sakai-osaka-fes
 https://shinra-portal.com/shops/osaka-festival-suita-family-hall-suita-osaka-festival/
 https://shinra-portal.com/shops/osaka-festival-tamade-family-hall/
 https://shinra-portal.com/shops/osaka-festival-tezukayama-family-hall/
+https://shinra-portal.com/shops/osaka-prefecture-real-estate-sales-center/
 https://shinra-portal.com/shops/osouji-concierge-wat/
 https://shinra-portal.com/shops/osouji-headquarters-anjo-izumi-store/
 https://shinra-portal.com/shops/pickleball-store-dink/
