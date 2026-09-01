@@ -5,15 +5,20 @@ import os
 import re
 import sys
 import time
+import unicodedata
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from html.parser import HTMLParser
 from pathlib import Path
 
 SITEMAP_URL = "https://shinra-portal.com/sitemap-shops-1.xml"
 BPLUS_URL = "https://www.business-plus.net/interview/"
 BSTIMES_URL = "https://bs-times.com/"
+TOKORO_API_URL = (
+    "https://tokoro-map.com/wp-json/business-directory/v1/shops?per_page=100&page=1"
+)
 WEBHOOK_URL = os.environ["SLACK_WEBHOOK_URL"]
 INTERVAL_SECONDS = int(os.environ.get("INTERVAL_SECONDS", "30"))
 STATE_FILE = Path(os.environ.get(
@@ -27,6 +32,14 @@ BPLUS_STATE_FILE = Path(os.environ.get(
 BSTIMES_STATE_FILE = Path(os.environ.get(
     "BSTIMES_STATE_FILE",
     "/var/lib/shinra-listing-monitor/seen-bstimes.txt",
+))
+TOKORO_STATE_FILE = Path(os.environ.get(
+    "TOKORO_STATE_FILE",
+    "/var/lib/shinra-listing-monitor/seen-tokoro.txt",
+))
+IDENTITY_STATE_FILE = Path(os.environ.get(
+    "IDENTITY_STATE_FILE",
+    "/var/lib/shinra-listing-monitor/seen-business-identities.txt",
 ))
 USER_AGENT = "ListingMonitor/2.0"
 
@@ -121,6 +134,58 @@ def current_bstimes_items():
     return list(unique.items())
 
 
+def current_tokoro_items():
+    data = json.loads(fetch(TOKORO_API_URL).decode("utf-8", errors="replace"))
+    items = []
+    for shop in data:
+        url = str(shop.get("permalink") or "").strip()
+        if not url:
+            continue
+        items.append({
+            "url": url,
+            "name": str(shop.get("name") or "").strip() or "名称不明",
+            "phone": str(shop.get("phone") or "").strip() or "記載なし",
+        })
+    return items
+
+
+def identity_keys(name, phone):
+    keys = set()
+    digits = "".join(character for character in str(phone) if character.isdigit())
+    if len(digits) >= 8:
+        keys.add(f"phone:{digits}")
+    normalized_name = unicodedata.normalize("NFKC", str(name)).casefold()
+    normalized_name = "".join(
+        character for character in normalized_name if character.isalnum()
+    )
+    if normalized_name:
+        keys.add(f"name:{normalized_name}")
+    return keys
+
+
+def seed_identity_baseline(tokoro_items):
+    identities = set()
+    for item in tokoro_items:
+        identities.update(identity_keys(item["name"], item["phone"]))
+
+    shinra_urls = current_shinra_urls()
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = {executor.submit(shinra_details, url): url for url in shinra_urls}
+        for future in as_completed(futures):
+            try:
+                name, phone = future.result()
+                identities.update(identity_keys(name, phone))
+            except Exception as error:
+                print(f"Identity baseline error: {error}", file=sys.stderr, flush=True)
+
+    save_seen(IDENTITY_STATE_FILE, identities)
+    print(
+        f"Cross-site identity baseline saved: {len(identities)} keys",
+        flush=True,
+    )
+    return identities
+
+
 def shinra_details(url):
     try:
         page = fetch(url).decode("utf-8", errors="replace")
@@ -181,6 +246,17 @@ def send_bstimes(title, url):
     )
 
 
+def send_tokoro(name, phone, url):
+    if phone != "記載なし":
+        phone = "".join(character for character in phone if character.isdigit()) or "記載なし"
+    post_slack(
+        "トコロまっぷに新しいお店・会社が掲載されました！\n"
+        f"店舗・会社名：{name}\n"
+        f"電話番号：{phone}\n"
+        f"掲載ページ：{url}"
+    )
+
+
 def load_seen(path):
     if not path.exists():
         return set()
@@ -208,10 +284,17 @@ def check_shinra():
     new_urls = [url for url in urls if url not in seen]
     for url in reversed(new_urls):
         name, phone = shinra_details(url)
-        send_shinra(name, phone, url)
+        identities = load_seen(IDENTITY_STATE_FILE)
+        keys = identity_keys(name, phone)
+        if keys and identities.intersection(keys):
+            print(f"Shinra duplicate skipped: {name} ({url})", flush=True)
+        else:
+            send_shinra(name, phone, url)
+            print(f"Shinra notified: {name} ({url})", flush=True)
+        identities.update(keys)
+        save_seen(IDENTITY_STATE_FILE, identities)
         seen.add(url)
         save_seen(STATE_FILE, seen)
-        print(f"Shinra notified: {name} ({url})", flush=True)
     print(f"Shinra check: {len(new_urls)} new", flush=True)
 
 
@@ -249,11 +332,42 @@ def check_bstimes():
     print(f"B.S.TIMES check: {len(new_items)} new", flush=True)
 
 
+def check_tokoro():
+    items = current_tokoro_items()
+    seen = load_seen(TOKORO_STATE_FILE)
+    current_urls = {item["url"] for item in items}
+    if not seen:
+        save_seen(TOKORO_STATE_FILE, current_urls)
+        if not IDENTITY_STATE_FILE.exists():
+            seed_identity_baseline(items)
+        print(f"Tokoro baseline saved: {len(items)} listings", flush=True)
+        return
+
+    identities = load_seen(IDENTITY_STATE_FILE)
+    new_items = [item for item in items if item["url"] not in seen]
+    for item in reversed(new_items):
+        keys = identity_keys(item["name"], item["phone"])
+        if keys and identities.intersection(keys):
+            print(
+                f"Tokoro duplicate skipped: {item['name']} ({item['url']})",
+                flush=True,
+            )
+        else:
+            send_tokoro(item["name"], item["phone"], item["url"])
+            print(f"Tokoro notified: {item['name']} ({item['url']})", flush=True)
+        identities.update(keys)
+        save_seen(IDENTITY_STATE_FILE, identities)
+        seen.add(item["url"])
+        save_seen(TOKORO_STATE_FILE, seen)
+    print(f"Tokoro check: {len(new_items)} new", flush=True)
+
+
 def check_once():
     for name, checker in (
         ("Shinra", check_shinra),
         ("B+", check_bplus),
         ("B.S.TIMES", check_bstimes),
+        ("Tokoro", check_tokoro),
     ):
         try:
             checker()
@@ -263,7 +377,7 @@ def check_once():
 
 def main():
     print(
-        f"Starting Shinra + B+ + B.S.TIMES monitor every {INTERVAL_SECONDS} seconds",
+        f"Starting Shinra + B+ + B.S.TIMES + Tokoro monitor every {INTERVAL_SECONDS} seconds",
         flush=True,
     )
     while True:
