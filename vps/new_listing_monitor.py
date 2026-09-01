@@ -90,20 +90,30 @@ def current_bplus_items():
 
 
 def current_bstimes_items():
-    home = fetch(BSTIMES_URL).decode("utf-8", errors="replace")
-    volumes = [int(value) for value in re.findall(r"/vol(\d+)/news\.cgi", home)]
+    home = fetch(BSTIMES_URL).decode("cp932", errors="replace")
+    volumes = [int(value) for value in re.findall(r"vol(\d+)/news\.cgi", home)]
     if not volumes:
         raise RuntimeError("B.S.TIMES latest volume was not found")
     volume = max(volumes)
     issue_url = f"{BSTIMES_URL}vol{volume}/news.cgi"
-    page = fetch(issue_url).decode("utf-8", errors="replace")
-    pattern = re.compile(
-        rf'<a\b[^>]*href=["\']([^"\']*/vol{volume}/\d+\.html)["\'][^>]*>(.*?)</a>',
+    page = fetch(issue_url).decode("cp932", errors="replace")
+    unique = {}
+    blocks = re.findall(
+        r'<table\b[^>]*class=["\']table01["\'][^>]*>.*?</table>',
+        page,
         re.IGNORECASE | re.DOTALL,
     )
-    unique = {}
-    for href, raw_title in pattern.findall(page):
-        url = urllib.parse.urljoin(issue_url, href)
+    for block in blocks:
+        link = re.search(r'href=["\'](\d+\.html)["\']', block, re.IGNORECASE)
+        heading = re.search(
+            r'<span\b[^>]*class=["\']ttl01["\'][^>]*>(.*?)</span>',
+            block,
+            re.IGNORECASE | re.DOTALL,
+        )
+        if not link:
+            continue
+        url = urllib.parse.urljoin(issue_url, link.group(1))
+        raw_title = heading.group(1) if heading else ""
         title = " ".join(re.sub(r"<[^>]+>", " ", raw_title).split())
         unique.setdefault(url, html.unescape(title) or f"B.S.TIMES Vol.{volume}")
     if not unique:
