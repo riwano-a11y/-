@@ -155,6 +155,8 @@ def post_slack(text):
 
 
 def send_shinra(name, phone, url):
+    if phone != "記載なし":
+        phone = "".join(character for character in phone if character.isdigit()) or "記載なし"
     post_slack(
         "新しくお店もしくは会社が掲載されました！\n"
         f"店舗・会社名：{name}\n"
