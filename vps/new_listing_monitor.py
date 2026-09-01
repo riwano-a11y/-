@@ -20,6 +20,7 @@ TOKORO_API_URL = (
     "https://tokoro-map.com/wp-json/business-directory/v1/shops?per_page=100&page=1"
 )
 WEBHOOK_URL = os.environ["SLACK_WEBHOOK_URL"]
+MEDIA_WEBHOOK_URL = os.environ.get("MEDIA_SLACK_WEBHOOK_URL", WEBHOOK_URL)
 INTERVAL_SECONDS = int(os.environ.get("INTERVAL_SECONDS", "30"))
 STATE_FILE = Path(os.environ.get(
     "STATE_FILE",
@@ -206,10 +207,10 @@ def shinra_details(url):
     return url.rstrip("/").rsplit("/", 1)[-1], "記載なし"
 
 
-def post_slack(text):
+def post_slack(text, webhook_url=WEBHOOK_URL):
     payload = json.dumps({"text": text}, ensure_ascii=False).encode("utf-8")
     request = urllib.request.Request(
-        WEBHOOK_URL,
+        webhook_url,
         data=payload,
         headers={"Content-Type": "application/json"},
         method="POST",
@@ -234,7 +235,8 @@ def send_bplus(title, url):
     post_slack(
         "B＋に新しい会社が掲載されました！\n"
         f"記事名：{title}\n"
-        f"掲載ページ：{url}"
+        f"掲載ページ：{url}",
+        MEDIA_WEBHOOK_URL,
     )
 
 
@@ -242,7 +244,8 @@ def send_bstimes(title, url):
     post_slack(
         "B.S.TIMESに新しい会社・店舗が掲載されました！\n"
         f"記事名：{title}\n"
-        f"掲載ページ：{url}"
+        f"掲載ページ：{url}",
+        MEDIA_WEBHOOK_URL,
     )
 
 
