@@ -13,6 +13,7 @@ from pathlib import Path
 
 SITEMAP_URL = "https://shinra-portal.com/sitemap-shops-1.xml"
 BPLUS_URL = "https://www.business-plus.net/interview/"
+BSTIMES_URL = "https://bs-times.com/"
 WEBHOOK_URL = os.environ["SLACK_WEBHOOK_URL"]
 INTERVAL_SECONDS = int(os.environ.get("INTERVAL_SECONDS", "30"))
 STATE_FILE = Path(os.environ.get(
@@ -22,6 +23,10 @@ STATE_FILE = Path(os.environ.get(
 BPLUS_STATE_FILE = Path(os.environ.get(
     "BPLUS_STATE_FILE",
     "/var/lib/shinra-listing-monitor/seen-bplus.txt",
+))
+BSTIMES_STATE_FILE = Path(os.environ.get(
+    "BSTIMES_STATE_FILE",
+    "/var/lib/shinra-listing-monitor/seen-bstimes.txt",
 ))
 USER_AGENT = "ListingMonitor/2.0"
 
@@ -84,6 +89,28 @@ def current_bplus_items():
     return list(unique.items())
 
 
+def current_bstimes_items():
+    home = fetch(BSTIMES_URL).decode("utf-8", errors="replace")
+    volumes = [int(value) for value in re.findall(r"/vol(\d+)/news\.cgi", home)]
+    if not volumes:
+        raise RuntimeError("B.S.TIMES latest volume was not found")
+    volume = max(volumes)
+    issue_url = f"{BSTIMES_URL}vol{volume}/news.cgi"
+    page = fetch(issue_url).decode("utf-8", errors="replace")
+    pattern = re.compile(
+        rf'<a\b[^>]*href=["\']([^"\']*/vol{volume}/\d+\.html)["\'][^>]*>(.*?)</a>',
+        re.IGNORECASE | re.DOTALL,
+    )
+    unique = {}
+    for href, raw_title in pattern.findall(page):
+        url = urllib.parse.urljoin(issue_url, href)
+        title = " ".join(re.sub(r"<[^>]+>", " ", raw_title).split())
+        unique.setdefault(url, html.unescape(title) or f"B.S.TIMES Vol.{volume}")
+    if not unique:
+        raise RuntimeError(f"B.S.TIMES Vol.{volume} articles were not found")
+    return list(unique.items())
+
+
 def shinra_details(url):
     try:
         page = fetch(url).decode("utf-8", errors="replace")
@@ -129,6 +156,14 @@ def send_shinra(name, phone, url):
 def send_bplus(title, url):
     post_slack(
         "B＋に新しい会社が掲載されました！\n"
+        f"記事名：{title}\n"
+        f"掲載ページ：{url}"
+    )
+
+
+def send_bstimes(title, url):
+    post_slack(
+        "B.S.TIMESに新しい会社・店舗が掲載されました！\n"
         f"記事名：{title}\n"
         f"掲載ページ：{url}"
     )
@@ -185,8 +220,29 @@ def check_bplus():
     print(f"B+ check: {len(new_items)} new", flush=True)
 
 
+def check_bstimes():
+    items = current_bstimes_items()
+    seen = load_seen(BSTIMES_STATE_FILE)
+    current_urls = {url for url, _ in items}
+    if not seen:
+        save_seen(BSTIMES_STATE_FILE, current_urls)
+        print(f"B.S.TIMES baseline saved: {len(items)} listings", flush=True)
+        return
+    new_items = [(url, title) for url, title in items if url not in seen]
+    for url, title in reversed(new_items):
+        send_bstimes(title, url)
+        seen.add(url)
+        save_seen(BSTIMES_STATE_FILE, seen)
+        print(f"B.S.TIMES notified: {title} ({url})", flush=True)
+    print(f"B.S.TIMES check: {len(new_items)} new", flush=True)
+
+
 def check_once():
-    for name, checker in (("Shinra", check_shinra), ("B+", check_bplus)):
+    for name, checker in (
+        ("Shinra", check_shinra),
+        ("B+", check_bplus),
+        ("B.S.TIMES", check_bstimes),
+    ):
         try:
             checker()
         except Exception as error:
@@ -194,7 +250,10 @@ def check_once():
 
 
 def main():
-    print(f"Starting Shinra + B+ monitor every {INTERVAL_SECONDS} seconds", flush=True)
+    print(
+        f"Starting Shinra + B+ + B.S.TIMES monitor every {INTERVAL_SECONDS} seconds",
+        flush=True,
+    )
     while True:
         started = time.monotonic()
         check_once()
