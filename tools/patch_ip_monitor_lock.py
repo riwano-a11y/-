@@ -16,7 +16,19 @@ if marker in text:
     print("Overlap lock already installed.")
     raise SystemExit(0)
 
-lock_code = '''\n+import fcntl\n+\n+_IP_MONITOR_LOCK_FILE = open("/tmp/ip-monitor.lock", "w")\n+try:\n+    fcntl.flock(\n+        _IP_MONITOR_LOCK_FILE.fileno(),\n+        fcntl.LOCK_EX | fcntl.LOCK_NB,\n+    )\n+except BlockingIOError:\n+    raise SystemExit(0)\n+\n+'''
+lock_code = '''
+import fcntl
+
+_IP_MONITOR_LOCK_FILE = open("/tmp/ip-monitor.lock", "w")
+try:
+    fcntl.flock(
+        _IP_MONITOR_LOCK_FILE.fileno(),
+        fcntl.LOCK_EX | fcntl.LOCK_NB,
+    )
+except BlockingIOError:
+    raise SystemExit(0)
+
+'''
 
 # Insert after a shebang when present, otherwise at the beginning.
 if text.startswith("#!"):
