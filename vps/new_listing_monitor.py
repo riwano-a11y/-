@@ -231,22 +231,114 @@ def send_shinra(name, phone, url):
     )
 
 
-def send_bplus(title, url):
+def plain_lines(page):
+    page = re.sub(r"<(script|style)\b[^>]*>.*?</\1>", "", page,
+                  flags=re.I | re.S)
+    page = re.sub(r"<br\s*/?>|</(?:p|div|tr|td|th|h[1-6]|li|dt|dd)>",
+                  "\n", page, flags=re.I)
+    return [line.strip() for line in html.unescape(
+        re.sub(r"<[^>]+>", "", page)).splitlines() if line.strip()]
+
+
+def contact_phone(page):
+    normalized = unicodedata.normalize("NFKC", page)
+    # Prefer an explicitly labelled telephone; never treat FAX as a phone.
+    text = "\n".join(plain_lines(normalized))
+    match = re.search(r"(?:TEL(?:EPHONE)?|電話(?:番号)?)\s*[.:：]?\s*"
+                      r"(0[0-9()（） \t\-‐‑–—ー−]{8,22})", text, re.I)
+    if not match:
+        match = re.search(r'href=["\']tel:([^"\']+)', normalized, re.I)
+    if match:
+        digits = re.sub(r"\D", "", match.group(1))
+        if digits.startswith("81"):
+            digits = "0" + digits[2:]
+        if digits.startswith("0") and 10 <= len(digits) <= 11:
+            return digits
+    return "記載なし"
+
+
+def media_details(url, source):
+    encoding = "utf-8" if source == "bplus" else "cp932"
+    page = fetch(url).decode(encoding, errors="replace")
+    if source == "bplus":
+        # Company Data is usually on the last interview page.
+        pages = [int(n) for n in re.findall(r"[?&](?:amp;)?page=(\d+)", page)]
+        if pages:
+            page = fetch(url + "?page=" + str(max(pages))).decode(
+                encoding, errors="replace")
+        start = page.find("Company Data")
+        if start < 0:
+            return "記載なし", "記載なし", "記載なし"
+        section = page[start:]
+        section = re.split(r"<!--\s*/siegeTextBox\s*-->|</article>|</table>",
+                           section, maxsplit=1, flags=re.I)[0]
+        lines = plain_lines(section)
+        lines = [line for line in lines if "Company Data" not in line]
+        name = lines[0] if lines else "記載なし"
+    else:
+        parts = re.split(r"(?:■〓){3,}■?", page)
+        section = parts[-2] if len(parts) >= 3 else ""
+        lines = plain_lines(section)
+        name = lines[0] if lines else "記載なし"
+    prefecture = r"(?:北海道|東京都|大阪府|京都府|.{2,3}県)"
+    addresses = [line for line in lines if re.match(
+        r"^(?:〒\s*\d{3}[-－]?\d{4}\s*)?" + prefecture, line)]
+    address = " ／ ".join(addresses) or "記載なし"
+    phone = contact_phone(section)
+    # B+ often omits phone numbers. Consult only the linked official site.
+    if phone == "記載なし":
+        links = re.findall(r'href=["\'](https?://[^"\']+)', section, re.I)
+        official = next((html.unescape(link) for link in links if
+                        urllib.parse.urlsplit(link).hostname and
+                        not urllib.parse.urlsplit(link).hostname.endswith(
+                            "business-plus.net")), None)
+        if official:
+            try:
+                raw = fetch(official)
+                official_page = raw.decode("utf-8", errors="replace")
+                phone = contact_phone(official_page)
+                if phone == "記載なし":
+                    candidates = []
+                    for href, label in re.findall(
+                        r'<a\b[^>]*href=["\']([^"\']+)["\'][^>]*>(.*?)</a>',
+                        official_page, re.I | re.S):
+                        target = urllib.parse.urljoin(official, html.unescape(href))
+                        if (urllib.parse.urlsplit(target).hostname ==
+                                urllib.parse.urlsplit(official).hostname and
+                                re.search(r"company|about|contact|会社概要|お問い合わせ",
+                                          href + label, re.I) and
+                                target not in candidates):
+                            candidates.append(target)
+                    for target in candidates[:2]:
+                        phone = contact_phone(fetch(target).decode(
+                            "utf-8", errors="replace"))
+                        if phone != "記載なし":
+                            break
+            except Exception as error:
+                print(f"Official contact lookup failed for {url}: {error}",
+                      file=sys.stderr, flush=True)
+    return name, phone, address
+
+
+def send_media(source, url):
+    name, phone, address = media_details(url, source)
+    label = "B＋" if source == "bplus" else "B.S.TIMES"
     post_slack(
-        "B＋に新しい会社が掲載されました！\n"
-        f"記事名：{title}\n"
-        f"掲載ページ：{url}",
+        f"{label}に新しい会社・店舗が掲載されました！\n"
+        f"会社名：{name}\n"
+        f"電話番号：{phone}\n"
+        f"会社住所：{address}\n"
+        f"URL：{url}",
         MEDIA_WEBHOOK_URL,
     )
+
+
+def send_bplus(title, url):
+    send_media("bplus", url)
 
 
 def send_bstimes(title, url):
-    post_slack(
-        "B.S.TIMESに新しい会社・店舗が掲載されました！\n"
-        f"記事名：{title}\n"
-        f"掲載ページ：{url}",
-        MEDIA_WEBHOOK_URL,
-    )
+    send_media("bstimes", url)
 
 
 def send_tokoro(name, phone, url):
@@ -392,3 +484,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
