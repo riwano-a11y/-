@@ -19,6 +19,8 @@ BSTIMES_URL = "https://bs-times.com/"
 TOKORO_API_URL = (
     "https://tokoro-map.com/wp-json/business-directory/v1/shops?per_page=100&page=1"
 )
+ISANA_API_URL = "https://isana-listing.com/wp-json/business-directory/v1/shops"
+ISANA_STATE_FILE = Path(os.environ.get("ISANA_STATE_FILE", "/var/lib/shinra-listing-monitor/seen-isana.txt"))
 WEBHOOK_URL = os.environ["SLACK_WEBHOOK_URL"]
 MEDIA_WEBHOOK_URL = os.environ.get("MEDIA_SLACK_WEBHOOK_URL", WEBHOOK_URL)
 INTERVAL_SECONDS = int(os.environ.get("INTERVAL_SECONDS", "30"))
@@ -457,12 +459,86 @@ def check_tokoro():
     print(f"Tokoro check: {len(new_items)} new", flush=True)
 
 
+
+def current_isana_items():
+    # Read all pages so a burst larger than 100 cannot hide new listings.
+    items = {}
+    page = 1
+    known = load_seen(ISANA_STATE_FILE)
+    while True:
+        query = urllib.parse.urlencode({"per_page": 100, "page": page})
+        data = json.loads(fetch(ISANA_API_URL + "?" + query).decode("utf-8"))
+        if not isinstance(data, list):
+            raise RuntimeError("Isana returned an invalid listing response")
+        added = 0
+        for shop in data:
+            url = str(shop.get("permalink") or "").strip()
+            if not url or url in items:
+                continue
+            if urllib.parse.urlsplit(url).hostname != "isana-listing.com":
+                raise RuntimeError("Isana returned an unexpected listing URL")
+            items[url] = {
+                "url": url,
+                "name": html.unescape(str(shop.get("name") or "").strip()),
+                "phone": str(shop.get("phone") or "").strip() or "記載なし",
+                "address": "".join(str(shop.get(field) or "").strip()
+                                   for field in ("stateIso", "city", "street", "street1"))
+                           or "記載なし",
+            }
+            if not items[url]["name"]:
+                raise RuntimeError("Isana listing has no business name")
+            added += 1
+        if len(data) < 100 or (known and all(
+                str(shop.get("permalink") or "").strip() in known for shop in data)):
+            return list(items.values())
+        if not added:
+            raise RuntimeError("Isana pagination did not advance")
+        page += 1
+
+
+def check_isana():
+    items = current_isana_items()
+    seen = load_seen(ISANA_STATE_FILE)
+    identities = load_seen(IDENTITY_STATE_FILE)
+    if not ISANA_STATE_FILE.exists():
+        # Baseline is silent, and also prevents these existing businesses
+        # being notified later from Shinra or Tokoro.
+        for item in items:
+            identities.update(identity_keys(item["name"], item["phone"]))
+        save_seen(IDENTITY_STATE_FILE, identities)
+        save_seen(ISANA_STATE_FILE, {item["url"] for item in items})
+        print(f"Isana baseline saved: {len(items)} listings", flush=True)
+        return
+    for item in reversed(items):
+        url = item["url"]
+        if url in seen:
+            continue
+        keys = identity_keys(item["name"], item["phone"])
+        if keys and identities.intersection(keys):
+            print(f"Isana duplicate skipped: {item['name']} ({url})", flush=True)
+        else:
+            phone = re.sub(r"\D", "", unicodedata.normalize("NFKC", item["phone"])) or "記載なし"
+            post_slack(
+                "みせルートに新しいお店・会社が掲載されました！\n"
+                f"店舗・会社名：{item['name']}\n"
+                f"電話番号：{phone}\n"
+                f"住所：{item['address']}\n"
+                f"URL：{url}"
+            )
+            print(f"Isana notified: {item['name']} ({url})", flush=True)
+        identities.update(keys)
+        save_seen(IDENTITY_STATE_FILE, identities)
+        seen.add(url)
+        save_seen(ISANA_STATE_FILE, seen)
+
+
 def check_once():
     for name, checker in (
         ("Shinra", check_shinra),
         ("B+", check_bplus),
         ("B.S.TIMES", check_bstimes),
         ("Tokoro", check_tokoro),
+        ("Isana", check_isana),
     ):
         try:
             checker()
@@ -472,7 +548,7 @@ def check_once():
 
 def main():
     print(
-        f"Starting Shinra + B+ + B.S.TIMES + Tokoro monitor every {INTERVAL_SECONDS} seconds",
+        f"Starting Shinra + B+ + B.S.TIMES + Tokoro + Isana monitor every {INTERVAL_SECONDS} seconds",
         flush=True,
     )
     while True:
