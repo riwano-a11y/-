@@ -189,7 +189,7 @@ def seed_identity_baseline(tokoro_items):
     return identities
 
 
-def shinra_details(url):
+def shinra_details(url, include_address=False):
     try:
         page = fetch(url).decode("utf-8", errors="replace")
         match = re.search(
@@ -199,14 +199,23 @@ def shinra_details(url):
         )
         if match:
             data = json.loads(html.unescape(match.group(1)))
-            return (
+            address = data.get("address") or {}
+            if isinstance(address, dict):
+                address = "".join(str(address.get(field) or "").strip()
+                                  for field in ("addressRegion", "addressLocality",
+                                                "streetAddress")) or "記載なし"
+            else:
+                address = str(address).strip() or "記載なし"
+            details = (
                 str(data.get("name") or "").strip()
                 or url.rstrip("/").rsplit("/", 1)[-1],
                 str(data.get("telephone") or "").strip() or "記載なし",
             )
+            return details + (address,) if include_address else details
     except Exception as error:
         print(f"Details error for {url}: {error}", file=sys.stderr, flush=True)
-    return url.rstrip("/").rsplit("/", 1)[-1], "記載なし"
+    details = (url.rstrip("/").rsplit("/", 1)[-1], "記載なし")
+    return details + ("記載なし",) if include_address else details
 
 
 def post_slack(text, webhook_url=WEBHOOK_URL):
@@ -222,13 +231,14 @@ def post_slack(text, webhook_url=WEBHOOK_URL):
             raise RuntimeError(f"Slack returned HTTP {response.status}")
 
 
-def send_shinra(name, phone, url):
+def send_shinra(name, phone, url, address="記載なし"):
     if phone != "記載なし":
         phone = "".join(character for character in phone if character.isdigit()) or "記載なし"
     post_slack(
         "新しくお店もしくは会社が掲載されました！\n"
         f"店舗・会社名：{name}\n"
         f"電話番号：{phone}\n"
+        f"住所：{address}\n"
         f"掲載ページ：{url}"
     )
 
@@ -380,13 +390,13 @@ def check_shinra():
         return
     new_urls = [url for url in urls if url not in seen]
     for url in reversed(new_urls):
-        name, phone = shinra_details(url)
+        name, phone, address = shinra_details(url, include_address=True)
         identities = load_seen(IDENTITY_STATE_FILE)
         keys = identity_keys(name, phone)
         if keys and identities.intersection(keys):
             print(f"Shinra duplicate skipped: {name} ({url})", flush=True)
         else:
-            send_shinra(name, phone, url)
+            send_shinra(name, phone, url, address)
             print(f"Shinra notified: {name} ({url})", flush=True)
         identities.update(keys)
         save_seen(IDENTITY_STATE_FILE, identities)
